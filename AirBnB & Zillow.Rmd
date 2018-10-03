@@ -1,0 +1,507 @@
+---
+title: "CAPITAL ONE AIRBnB & ZILLOW DATA CHALLENGE"
+output: word_document
+---
+OVERVIEW OF BUSINESS PROBLEM AND DATA
+
+Problem Statement :- The problem statement is about you being as a Consulting firm help a real estate agency to understand which are the best zipcodes in New York City to buy and rent property. The real estate agency has already figured company that 2 Bedrooms properties are the best for investment; however, they do not know which zip codes are the best to invest in. The real estate company has engaged your firm to build out a data product and provide your conclusions to help them understand which zip codes would generate the most profit on short term rentals within New York City.
+
+SOURCE OF THE DATA
+
+The data comes from two different sources i.e. Airbnb and Zillow.
+
+1) Zillow Dataset:- a) Zillow provides us an estimate of value for two-bedroom properties and consist information on RegionID, RegionName, City, State, SizeRank and Cost shown between April 1996 to June 2017.
+
+2) Airbnb Dataset:- a)Airbnb datset contains information on property listings such as location details, number of bedrooms, room types, services, host details, cleaning fee, rent price details, reviews and ratings.
+
+Steps to be Followed :-
+
+A) Understand and Clean the data.
+B) Highlight Quality Insights based on Analysis and Data Munging.
+C) Perform Data Visualization and obtain useful information through data mining which can help solve the above business problem.
+
+ASSUMPTIONS:-
+
+1) The investor will pay for the property in cash (i.e. no mortgage/interest rate will need to be accounted for).
+
+2) The time value of money discount rate is 0% (i.e. $1 today is worth the same 100 years from now).
+
+3) All properties and all square feet within each locale can be assumed to be homogeneous (i.e. a 1000 square foot property in a locale such as Bronx or Manhattan generates twice the revenue and costs twice as much as any other 500 square foot property within that same locale.)
+
+4) Assumming Occupancy rate is 75% as given in the statement.
+
+5) Assuming the company will put properties on rent throughout the year every day. 
+
+6) Calculating the Latest Price of the property by using Auto.ARIMA function for the next year by considering the values of last 7 years.
+
+7) Approach :- Keeping the occupancy rate 75% for each scenario(for example:- Daily, Weekly and Monthly) to check which Zipcodes are profitable for daily,weekly and for monthly bookings. I assumed this because people mostly book rental places for more than a day because it is cheaper than hotels and people who travel for business book properties for single day. ALso students who come for studies can book the apartment for months.
+
+8) By using the formula we can segregate the zipcodes based upon revenue, which zipcode will give better revenue if we put the apartment for daily basis bookings, which is benefical for weekly and monthly.
+
+DATA LOADING
+
+a) Loading the ZILLOW DATA
+b) Zillow data contains 8946 Rows and 262 Columns
+
+```{r}
+dfzill <- read.csv("C:/Users/Setia Comp/Downloads/CO/Zip_Zhvi_2bedroom.csv")
+head(dfzill)
+```
+
+Checking the dimensions of the dataset.
+
+```{r}
+dim(dfzill)
+```
+
+a) Loading the Airbnb Data.
+b) The Airbnb data contains 40753 Rows and 95 Columns.
+
+```{r}
+dflist <- read.csv("C:/Users/Setia Comp/Downloads/CO/listings.csv")
+head(dflist)
+```
+
+Checking the dimensions of the dataset.
+
+```{r}
+dim(dflist)
+```
+
+Fetching the column names of Zillow data and Airbnb Data
+
+```{r}
+colnames(dfzill)
+```
+
+```{r}
+colnames(dflist)
+```
+
+DATA MUNGING
+
+Filtering out th Zillow Dataset
+
+Multiple steps will be executed to perform data munging. These steps are as follows:
+
+a) Creating a dataframe and Selecting only relevent columns such as RegionName, City, SizeRank and the cost property from last 7 years to forecast Latest Price of the property.
+
+```{r}
+Zillowdf <- dfzill[,c(2,3,7,190:262)]
+head(Zillowdf)
+```
+
+b) Installing the necessary packages. These packages are used for data pre-processing, cleaning, transformation and Visualization.
+
+c)From the selected columns filtering the the cityname which in our case is New York only.
+
+```{r}
+library(dplyr)
+Zillowdf <- filter(Zillowdf,City =="New York")
+head(Zillowdf)
+```
+
+d) Changing the column name RegionName to zipcode so we can merge both the dataset by this unique Id.
+
+```{r}
+colnames(Zillowdf)[1] <- "zipcode"
+colnames(Zillowdf)[1]
+head(Zillowdf)
+```
+
+e) Introducing the new column(Latest price) i.e current price of the properties to our zillow dataframe as forecasted value based upon previous values.
+
+```{r}
+Zillowdf$LatestPrice <- NA
+colnames(Zillowdf)
+```
+
+f) We are assuming that there is seasonality in the price and also that values depend not only on previous values (Auto Regressive AR) but also on differences between previous values (Moving Average MA) So we apply Auto.ARIMA model to predict the cost of the properties in Zipcodes from July 2017 to July 2018.
+
+```{r} 
+for(i in 1:nrow(Zillowdf)){
+  zillts = ts(as.vector(t(Zillowdf[,c(4:76)])[,i]),start = c(2011,06),frequency = 12)
+  ARfit = arima(zillts, order=c(1,1,1), seasonal=list(order=c(1,0,1),period=NA), 
+                     method="ML")
+  pred_val = predict(ARfit, n.ahead = 13)
+  
+  predval <- pred_val$pred
+  Zillowdf$LatestPrice[i] <- as.integer(predval[length(predval)])
+}
+head(Zillowdf)
+```
+
+g) Extracting the required columns for further Data Analysis and lets look at the top five rows from clean zillow data.
+
+```{r}
+Zillowdf <- Zillowdf[,c(1,2,3,77)]
+head(Zillowdf)
+```
+
+FILTERING THE LISTING DATA
+
+a) Filter the Listings data to obtain only those data points which correspond to properties having 2 bedrooms.
+
+b) We are selecting columns which are containing relevent information about rent values, column names includes (id, zipcode, bedrooms, price, weekely_price, monthly_price, cleaning fee, number_of_reviewa, review_scores_rating).
+
+```{r}
+listdf <- dflist[,c(1,44,56,61:63,65,77,80)]
+colnames(listdf)
+```
+
+c) From the selected columns filtering the the bedrooms = 2 as per the case study.
+
+```{r}
+library(dplyr)
+listdf <- filter(listdf,bedrooms==2)
+head(listdf)
+```
+
+
+COMBINING THE ZILLOW AND LISTING DATA
+
+a) Using the merge data to combine both the dataset based on the common unique key-Zipcode.
+
+```{r}
+mergedata <- merge(listdf,Zillowdf,by = c("zipcode"))
+colnames(mergedata)
+```
+
+b) Looking at the top 5 values of merge dataset. Now we will look at the structure and summary of the merge dataset.
+
+```{r}
+head(mergedata)
+```
+
+c)We can see that above output merged data contains lot of issues in data such as NAs, incorrect data symbols such as $ and wrong data types. So we move to data cleaning tab to clean the data
+
+```{r}
+str(mergedata)
+```
+
+```{r}
+summary(mergedata)
+```
+
+DATA CLEANING
+
+a) Settling the standard names of the columns in merged data.
+b) Correcting the number of levels in the data by including only NewYork city.
+
+```{r}
+colnames(mergedata) <-  c("zipcode","id","bedrooms","price","weekly_price","monthly_price","cleaning_fee","number_of_reviews","review_scores_rating","city","size_rank","LatestPrice")
+mergedata$city <- factor(mergedata$city, levels=c("New York"))
+
+head(mergedata)
+```
+
+c)Variables price(daily rent), weekly_price, monthly_price and cleaning_fee contain symbols such as "$" attached which would prevent these columns from being used for numerical analysis.
+
+
+```{r}
+colnm <- c("price", "weekly_price", "monthly_price","cleaning_fee")
+replacing_dollar <- function(x){
+  price <- as.numeric(gsub("[$,]","",x))
+  return(price)
+}
+mergedata[colnm] <- lapply(mergedata[colnm], replacing_dollar)
+head(mergedata)
+```
+
+d) Lets check the summary again and the result shows that all the variables have proper data type and consistent values except for missing data which will be imputed soon.
+
+```{r}
+summary(mergedata)
+```
+
+CREATING FUNCTION TO NORMALISE THE DATA POINTS AND SCALING THE VARIABLES OF 0-1
+
+```{r}
+scaling_data <- function(x){
+  return((x-min(x))/(max(x)-min(x)))
+}
+
+mergedata["number_of_reviews"] <- lapply(mergedata["number_of_reviews"], scaling_data)
+
+summary(mergedata$number_of_reviews)
+
+```
+
+```{r}
+summary(mergedata)
+
+```
+
+a) Using the ggplot2 library package to plot variables contain NA's values.
+
+```{r}
+library(ggplot2)
+library(naniar)
+gg_miss_fct(x = mergedata, fct = zipcode)
+```
+
+b) Removing the Na values - The NAs are removed below by imputing them through the use of mice package and CART algorithm as follows
+
+```{r}
+library(mice)
+impute_data <- subset(mergedata,select = -c(id,city)) 
+impute_data <- mice(impute_data,m=5, method='cart',printFlag=FALSE)
+final_data<- complete(impute_data)
+
+```
+
+c) There are no more missing data values in the final data
+
+```{r}
+summary(final_data)
+```
+
+d) Now we have a complete dataset and lets have a look on the summary.
+
+```{r}
+a <- subset(mergedata, select =c(id,city))
+complete_data <- cbind(final_data,a)
+summary(complete_data)
+```
+
+```{r}
+head(complete_data)
+```
+
+```{r}
+sum(sapply(complete_data, function(x) { sum(is.na(x)) }))
+
+```
+
+```{r}
+gg_miss_fct(x = complete_data, fct = zipcode) 
+```
+
+Now we can see above data is totally clean and there is no missing values. Lets step into further data analysis.
+
+Exploratory Data Analysis and Conclusion:-
+
+Assumption: All properties and all square feet within each locale can be assumed to be homogeneous.
+
+Daily price by Zipcode
+
+a) The graph depicts the daily price of the properties per zipcode.
+
+b)The zipcodes(10003,10011,10013,10014,10025,10036,11215) has the highest daiy market price by Zipcodes.
+
+
+```{r}
+library(ggplot2)
+ggplot(complete_data, aes(x=complete_data$zipcode, y=complete_data$price, fill=complete_data$zipcode )) + 
+  geom_bar(stat="identity", width = 0.6)+labs(title = "Daily Price by Zipcode",
+x="Zipcode",y="Daily Price")
+```
+
+Weekly Price by Zipcode
+
+a) The graph depicts the weekly price of the properties per zipcode.
+
+b)The zipcodes(10003,10011,10013,10014,10025,10036,11215) has the highest weekly market price by Zipcodes.
+
+```{r}
+library(ggplot2)
+ggplot(complete_data, aes(x=complete_data$zipcode, y=complete_data$weekly_price, fill=complete_data$zipcode )) + 
+  geom_bar(stat="identity", width = 0.6)+labs(title = "Weekly Price by Zipcode",
+x="Zipcode",y="Weekly Price")
+```
+
+Monthly Price by Zipcode
+
+a) The graph depicts the monthly price of the properties per zipcode.
+
+b)The zipcodes(10003,10011,10013,10014,10025,10036,11215) has the highest monthly market price by Zipcodes.
+
+```{r}
+library(ggplot2)
+ggplot(complete_data, aes(x=complete_data$zipcode, y=complete_data$monthly_price, fill=complete_data$zipcode )) + 
+  geom_bar(stat="identity", width = 0.6)+labs(title = "Monthly Price by Zipcode",
+x="Zipcode",y="Monthly Price")
+```
+
+Latest Price of the Properties by Zipcodes
+
+a) The graph depicts the Latest price of the properties per zipcode.
+
+b)The zipcodes(10011,10013,10014,10003) has the highest Latest market price by Zipcodes.
+
+```{r}
+qplot(data = complete_data, x = complete_data$zipcode, y = complete_data$LatestPrice, color = complete_data$zipcode, size = I(4), alpha = I(0.6)) + scale_y_continuous(name="Latest Price", limits=c(100000, 3500000))+labs(title = "Latest Price by Zipcode",
+x="Zipcode",y="Latest Price")
+```
+
+Size Rank of the Properties by Zipcodes
+
+a) The graph depicts the Size Rank of the properties per zipcode.
+
+b) Higher the size rank, lower the population of the area.
+
+```{r}
+ggplot(complete_data, aes(x=complete_data$zipcode, y=complete_data$size_rank)) + 
+  geom_point(size=2, col="tomato2") + 
+  geom_segment(aes(x=complete_data$zipcode, 
+                   xend=complete_data$zipcode, 
+                   y=0, 
+                   yend=complete_data$size_rank)) + 
+  labs(title="Zipcodes Vs Size Rank") + 
+  theme(axis.text.x = element_text(angle=65, vjust=0.6))
+```
+
+Review Score Rating of the Properties by Zipcodes
+
+a) The graph depicts the Review Score Rating of the properties per zipcode.
+
+b) Higher the reviews better the property would be.
+
+
+```{r}
+fill <- "#4271AE"
+line <- "#1F3552"
+
+p10 <- ggplot(complete_data, aes(x = complete_data$zipcode, y = complete_data$review_scores_rating)) +
+        geom_boxplot(fill = fill, colour = line) +
+        ggtitle("Zipcode Based on Review Score Rating")
+p10 + scale_y_reverse()
+```
+
+Important information Obatained from the above graphs:-
+
+a) There are 22 Zipcodes in New York city having rental properties listed on Airbnb
+
+b) With the above graph we can see the daily, weekly and monthly price of the property as of now and which zipcode has the highest market price respectvively.
+
+c) Now we use calculative formula to get the daily, weekly and monthy revenue of the properties and gathered the zipcodes to see which zipcode is more profitable for daily rental, weekly rental and monthly rental by revenue.
+
+d) Assuming that Ocuupancy rate to be 0.75 as given in the case study, Revenue of the property will be calculated by below formula:-
+
+Revenue <- Occupancyrate*Daily/weekly/monthly_price_of_the_property*365/48/12+(Cleaning_fee*occupancy_rate)*12 <- as cleaning fee will be paid by customer in the form of service tax based upon the occupancy rate.
+
+REVENUE- Revenue is the amount of money that a company actually receives during a specific period, including discounts and deductions for returned merchandise.
+Revenue is calculated by multiplying the price at which goods or services are sold by the number of units or amount sold.
+
+Calculating Revenue Based of the daily rental bookings:-
+
+```{r}
+occupancyrate_1<- 0.75
+Data1 <- complete_data
+Data1$Revenue_daily <-occupancyrate_1*Data1$price*365 +(Data1$cleaning_fee*occupancyrate_1)*12
+head(Data1)
+```
+
+Fetching relevant columns from the dataframe
+
+```{r}
+Column1 <- c("zipcode","id","city","Revenue_daily")
+Daily <- Data1[,Column1]
+sort_daily<- Daily[order(-Daily$Revenue_daily),]
+head(sort_daily)
+```
+
+Fecthing Top 10 zipcodes in descending order giving best revenue by daily rental.
+
+```{r}
+a <- head(sort_daily,10)
+qplot(data =a, x = a$zipcode, y = a$Revenue_daily, color = a$zipcode, size = I(5), alpha = I(0.9))+ labs(title = "Revenue_Daily by Zipcode",
+x="Zipcode",y="Revenue Daily")
+a
+```
+
+Conclusion:-
+
+The zipcodes with the highest Revenue by daily rentals are 10036, 10003, 10022, 10011
+and 10021.
+
+The zipcodes with the lowest Revenue by daily rentals are 10014, 10025, 10025 and 10022.
+
+Calculating the Revenue Based of the Weekly rental bookings:-
+
+```{r}
+occupancyrate_2 <- 0.75
+Data1$Revenue_weekly <-occupancyrate_2*Data1$weekly_price*4*12+(Data1$cleaning_fee*occupancyrate_2)*12
+head(Data1)
+
+```
+
+Fetching relevant columns from the dataframe
+
+```{r}
+Column2 <- c("zipcode","id","city","Revenue_weekly")
+weekly <- Data1[,Column2]
+sort_weekly<- weekly[order(-weekly$Revenue_weekly),]
+head(sort_weekly)
+```
+
+Fecthing Top 10 zipcodes in descending order giving best revenue by weekly rental.
+
+```{r}
+b <- head(sort_weekly,10)
+qplot(data =b, x = b$zipcode, y = b$Revenue_weekly, color = b$zipcode, size = I(5), alpha = I(0.9))+ labs(title = "Revenue_Weekly by Zipcode",
+x="Zipcode",y="Revenue Weekly")
+b
+```
+
+Conclusion:-
+
+The zipcodes with the highest Revenue by weekly rentals are 10014, 10128, 10011, 10036 and 10011.
+
+The zipcodes with the lowest Revenue by weekly rentals are 10003, 10011, 10011,10028 and 10011.
+
+
+
+
+Calculating the Revenue Based of the Monthly rental bookings:-
+
+```{r}
+occupancyrate_3 <- 0.75
+Data1$Revenue_monthly <-occupancyrate_3*Data1$monthly_price*12+(Data1$cleaning_fee*occupancyrate_3)*12
+head(Data1)
+
+```
+
+Fetching relevant columns from the dataframe
+
+```{r}
+Column3 <- c("zipcode","id","city","Revenue_monthly")
+monthly <- Data1[,Column3]
+sort_monthly<- monthly[order(-monthly$Revenue_monthly),]
+sort_monthly
+```
+
+Fecthing Top 10 zipcodes in descending order giving best revenue by monthly rental.
+
+```{r}
+c <- head(sort_monthly,10)
+qplot(data =c, x = c$zipcode, y = c$Revenue_monthly, color = c$zipcode, size = I(5), alpha = I(0.9)) + labs(title = "Revenue_monthly by Zipcode",
+x="Zipcode",y="Revenue Monthly")
+c
+```
+
+Conclusion:-
+
+The zipcodes with the highest Revenue by monthly rentals are 10036, 10011, 10013, 10014 and 10011.
+
+The zipcodes with the lowest Revenue by monthly rentals are 10013,10028 and 10014.
+
+
+SUMMARY OF THE ABOVE DATA ANALYSIS:-
+
+The purpose of this case study was to analyze the data given by Zillow
+and Airbnb  to identify the best zip codes for the investment in the two bedrooms properties in the City New York.
+
+Taking into consideration that some people come to visit New York for 2-3 days, some come for business trip and book an apartment for 1 day because they find it less expensive than hotels, some came for a week and book an apartment for whole week and there are many universities in New York, So there must be students and many international students as well who book an apartment for months as many people can't afford hostel rent.
+
+So I have segregated the properties into 3 scenarios. For which zipcodes and ID he should invest and  put his apartment for daily rental, for weekly rental and for monthly rental, so he can gain more profit out of it.
+
+Finally, we can summarise the above analysis and found that the zip codes with the highest Revenue from daily rental business are 10011, 10003, 10036, 10022, 11201 and 10025.
+The zip codes with the highest revenue from Weekly and Monthly business are 10011, 10036 and 10013.
+ Hence the zip codes with the highest revenue in any scenario keeping into account the consideration we made the zip codes with the maximum revenue are 10011,10036,10013,10022,11201 and 10025.
+
+
+
+
+
+
